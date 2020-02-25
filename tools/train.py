@@ -108,7 +108,6 @@ def main():
     dump_input = torch.rand(
         (1, 3, cfg.MODEL.IMAGE_SIZE[1], cfg.MODEL.IMAGE_SIZE[0])
     )
-    writer_dict['writer'].add_graph(model, (dump_input, ))
 
     logger.info(get_model_summary(model, dump_input))
 
@@ -116,25 +115,20 @@ def main():
 
     # define loss function (criterion) and optimizer
     criterion = JointsMSELoss(
-        use_target_weight=cfg.LOSS.USE_TARGET_WEIGHT
+        use_target_weight=cfg.LOSS.USE_TARGET_WEIGHT #true
     ).cuda()
 
     # Data loading code
-    normalize = transforms.Normalize(
-        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-    )
     train_dataset = eval('dataset.'+cfg.DATASET.DATASET)(
-        cfg, cfg.DATASET.ROOT, cfg.DATASET.TRAIN_SET, True,
+        cfg, cfg.DATASET.ROOT, cfg.DATASET.TRAIN_SET, 'train',
         transforms.Compose([
             transforms.ToTensor(),
-            normalize,
         ])
     )
     valid_dataset = eval('dataset.'+cfg.DATASET.DATASET)(
-        cfg, cfg.DATASET.ROOT, cfg.DATASET.TEST_SET, False,
+        cfg, cfg.DATASET.ROOT, cfg.DATASET.TEST_SET, 'val',
         transforms.Compose([
             transforms.ToTensor(),
-            normalize,
         ])
     )
 
@@ -143,14 +137,15 @@ def main():
         batch_size=cfg.TRAIN.BATCH_SIZE_PER_GPU*len(cfg.GPUS),
         shuffle=cfg.TRAIN.SHUFFLE,
         num_workers=cfg.WORKERS,
-        pin_memory=cfg.PIN_MEMORY
+        pin_memory=True
     )
+
     valid_loader = torch.utils.data.DataLoader(
         valid_dataset,
-        batch_size=cfg.TEST.BATCH_SIZE_PER_GPU*len(cfg.GPUS),
+        batch_size=cfg.TRAIN.BATCH_SIZE_PER_GPU * len(cfg.GPUS),
         shuffle=False,
         num_workers=cfg.WORKERS,
-        pin_memory=cfg.PIN_MEMORY
+        pin_memory=True
     )
 
     best_perf = 0.0

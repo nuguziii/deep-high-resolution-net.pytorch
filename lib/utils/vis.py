@@ -12,10 +12,10 @@ import math
 
 import numpy as np
 import torchvision
-import cv2
+import cv2, os
 
 from core.inference import get_max_preds
-
+from dataset.panoDataset import PANODataset
 
 def save_batch_image_with_joints(batch_image, batch_joints, batch_joints_vis,
                                  file_name, nrow=8, padding=2):
@@ -50,9 +50,44 @@ def save_batch_image_with_joints(batch_image, batch_joints, batch_joints_vis,
             k = k + 1
     cv2.imwrite(file_name, ndarr)
 
+def save_image_with_joints(batch_image, batch_joints, batch_joints_vis,
+                                 file_name, meta):
+    '''
+    batch_image: [1, channel, height, width]
+    batch_joints: [1, num_joints, 3],
+    batch_joints_vis: [1, num_joints, 1],
+    }
+    '''
+
+    pano = PANODataset(None)
+    image = cv2.imread(meta["filename"][0], cv2.IMREAD_COLOR)
+
+    joints = batch_joints[0]
+    joints_vis = batch_joints_vis[0]
+    joints_gt = meta['joints'][0]
+
+    cv2.putText(image, 'pred', (250, 100), cv2.FONT_ITALIC, 1.5, [255, 0, 0], 3)
+    cv2.circle(image, (200, 100), 3, [255, 0, 0], 2)
+    cv2.putText(image, 'gt', (250, 170), cv2.FONT_ITALIC, 1.5, [0, 255, 0], 3)
+    cv2.circle(image, (200, 170), 3, [0, 255, 0], 2)
+
+    for joint, joint_vis, joint_gt in zip(joints, joints_vis, joints_gt):
+        #joint[0] = x * width + padding + joint[0]
+        #joint[1] = y * height + padding + joint[1]
+        joint_coord = joint[:2]
+        joint_gt_coord = joint_gt[:2]
+        joint_coord = pano.getOriginalCoord(image, joint_coord)
+        joint_gt_coord = pano.getOriginalCoord(image, joint_gt_coord)
+
+        if joint_vis[0]:
+            cv2.circle(image, (int(joint_coord[0]), int(joint_coord[1])), 2, [255, 0, 0], 2)
+            cv2.circle(image, (int(joint_gt_coord[0]), int(joint_gt_coord[1])), 2, [0,255, 0], 2)
+
+    cv2.imwrite(file_name, image)
+
 
 def save_batch_heatmaps(batch_image, batch_heatmaps, file_name,
-                        normalize=True):
+                        normalize=False):
     '''
     batch_image: [batch_size, channel, height, width]
     batch_heatmaps: ['batch_size, num_joints, height, width]
@@ -138,4 +173,33 @@ def save_debug_images(config, input, meta, target, joints_pred, output,
     if config.DEBUG.SAVE_HEATMAPS_PRED:
         save_batch_heatmaps(
             input, output, '{}_hm_pred.jpg'.format(prefix)
+        )
+
+def save_result_images(config, input, meta, target, joints_pred, output,
+                      prefix, i):
+
+    if not os.path.exists(prefix):
+        os.makedirs(prefix)
+
+    if not os.path.exists(os.path.join(prefix, 'heatmap')):
+        os.makedirs(os.path.join(prefix, 'heatmap'))
+
+    heatDir = '{}_{}'.format(os.path.join(prefix, 'heatmap', 'test'), i)
+    imgDir = '{}_{}'.format(os.path.join(prefix, 'test'), i)
+
+    if not config.DEBUG.DEBUG:
+        return
+
+    if config.DEBUG.SAVE_BATCH_IMAGES_PRED:
+        save_image_with_joints(
+            input, joints_pred, meta['joints_vis'],
+            '{}.jpg'.format(imgDir), meta
+        )
+    if config.DEBUG.SAVE_HEATMAPS_GT:
+        save_batch_heatmaps(
+            input, target, '{}_hm_gt.jpg'.format(heatDir)
+        )
+    if config.DEBUG.SAVE_HEATMAPS_PRED:
+        save_batch_heatmaps(
+            input, output, '{}_hm_pred.jpg'.format(heatDir)
         )

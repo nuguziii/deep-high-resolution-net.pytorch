@@ -12,22 +12,15 @@ from collections import defaultdict
 from collections import OrderedDict
 import logging
 import os
-
-from pycocotools.coco import COCO
-from pycocotools.cocoeval import COCOeval
-import json_tricks as json
 import numpy as np
 
 from dataset.JointsDataset import JointsDataset
-from nms.nms import oks_nms
-from nms.nms import soft_oks_nms
-
 import dataset.panoDataset as pano
 
 logger = logging.getLogger(__name__)
 
 
-class COCODataset(JointsDataset):
+class PANO(JointsDataset):
     '''
     "keypoints": {
         0: "nose",
@@ -52,8 +45,8 @@ class COCODataset(JointsDataset):
         [16,14],[14,12],[17,15],[15,13],[12,13],[6,12],[7,13], [6,7],[6,8],
         [7,9],[8,10],[9,11],[2,3],[1,2],[1,3],[2,4],[3,5],[4,6],[5,7]]
     '''
-    def __init__(self, cfg, root, image_set, is_train, transform=None):
-        super().__init__(cfg, root, image_set, is_train, transform)
+    def __init__(self, cfg, root, image_set, state, transform=None):
+        super().__init__(cfg, root, image_set, state, transform)
         self.nms_thre = cfg.TEST.NMS_THRE
         self.image_thre = cfg.TEST.IMAGE_THRE
         self.soft_nms = cfg.TEST.SOFT_NMS
@@ -85,9 +78,8 @@ class COCODataset(JointsDataset):
             ]
         )
 
-        self.split = 'train' if is_train else 'val'
-
-        print('==> initializing pano {} data.'.format(self.split))
+        print('==> initializing pano {} data.'.format(state))
+        self.annot_path = os.path.join('C:\\Users\CGIP\Desktop\CenterNet\data\pano', state)
         self.pano = pano.PANODataset(self.annot_path)
 
         # load image file names
@@ -96,19 +88,6 @@ class COCODataset(JointsDataset):
         logger.info('=> num_images: {}'.format(self.num_images))
 
         self.num_joints = 32
-        self.flip_pairs = [[1, 2], [3, 4], [5, 6], [7, 8],
-                           [9, 10], [11, 12], [13, 14], [15, 16]]
-        self.parent_ids = None
-        self.upper_body_ids = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-        self.lower_body_ids = (11, 12, 13, 14, 15, 16)
-
-        self.joints_weight = np.array(
-            [
-                1., 1., 1., 1., 1., 1., 1., 1.2, 1.2,
-                1.5, 1.5, 1., 1., 1.2, 1.2, 1.5, 1.5
-            ],
-            dtype=np.float32
-        ).reshape((self.num_joints, 1))
 
         self.db = self._get_db()
 
@@ -145,29 +124,28 @@ class COCODataset(JointsDataset):
         clean_bbox = [0, 0, width, height]
 
         rec = []
-        for obj in objs:
-            joints_3d = np.zeros((self.num_joints, 3), dtype=np.float)
-            joints_3d_vis = np.zeros((self.num_joints, 3), dtype=np.float)
-            for ipt in range(self.num_joints):
-                joints_3d[ipt, 0] = obj[ipt]["center"][0]
-                joints_3d[ipt, 1] = obj[ipt]["center"][1]
-                joints_3d[ipt, 2] = 0
-                t_vis = obj[ipt]['visible']
+        joints_3d = np.zeros((self.num_joints, 3), dtype=np.float)
+        joints_3d_vis = np.zeros((self.num_joints, 3), dtype=np.float)
+        for ipt in range(self.num_joints):
+            joints_3d[ipt, 0] = objs[ipt+1]["center"][0]
+            joints_3d[ipt, 1] = objs[ipt+1]["center"][1]
+            joints_3d[ipt, 2] = 0
+            t_vis = objs[ipt+1]['visible']
 
-                joints_3d_vis[ipt, 0] = t_vis
-                joints_3d_vis[ipt, 1] = t_vis
-                joints_3d_vis[ipt, 2] = 0
+            joints_3d_vis[ipt, 0] = t_vis
+            joints_3d_vis[ipt, 1] = t_vis
+            joints_3d_vis[ipt, 2] = 0
 
-            center, scale = self._box2cs(clean_bbox[:4])
-            rec.append({
-                'image': img,
-                'center': center,
-                'scale': scale,
-                'joints_3d': joints_3d,
-                'joints_3d_vis': joints_3d_vis,
-                'filename': '',
-                'imgnum': 0,
-            })
+        center, scale = self._box2cs(clean_bbox[:4])
+        rec.append({
+            'image': img,
+            'center': center,
+            'scale': scale,
+            'joints_3d': joints_3d,
+            'joints_3d_vis': joints_3d_vis,
+            'filename': index,
+            'imgnum': 0,
+        })
 
         return rec
 

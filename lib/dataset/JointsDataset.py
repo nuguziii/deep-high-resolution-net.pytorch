@@ -19,20 +19,19 @@ from torch.utils.data import Dataset
 
 from utils.transforms import get_affine_transform
 from utils.transforms import affine_transform
-from utils.transforms import fliplr_joints
 
 
 logger = logging.getLogger(__name__)
 
 
 class JointsDataset(Dataset):
-    def __init__(self, cfg, root, image_set, is_train, transform=None):
-        self.num_joints = 0
+    def __init__(self, cfg, root, image_set, state, transform=None):
+        self.num_joints = 32
         self.pixel_std = 200
         self.flip_pairs = []
         self.parent_ids = []
 
-        self.is_train = is_train
+        self.state = state
         self.root = root
         self.image_set = image_set
 
@@ -62,51 +61,6 @@ class JointsDataset(Dataset):
     def evaluate(self, cfg, preds, output_dir, *args, **kwargs):
         raise NotImplementedError
 
-    def half_body_transform(self, joints, joints_vis):
-        upper_joints = []
-        lower_joints = []
-        for joint_id in range(self.num_joints):
-            if joints_vis[joint_id][0] > 0:
-                if joint_id in self.upper_body_ids:
-                    upper_joints.append(joints[joint_id])
-                else:
-                    lower_joints.append(joints[joint_id])
-
-        if np.random.randn() < 0.5 and len(upper_joints) > 2:
-            selected_joints = upper_joints
-        else:
-            selected_joints = lower_joints \
-                if len(lower_joints) > 2 else upper_joints
-
-        if len(selected_joints) < 2:
-            return None, None
-
-        selected_joints = np.array(selected_joints, dtype=np.float32)
-        center = selected_joints.mean(axis=0)[:2]
-
-        left_top = np.amin(selected_joints, axis=0)
-        right_bottom = np.amax(selected_joints, axis=0)
-
-        w = right_bottom[0] - left_top[0]
-        h = right_bottom[1] - left_top[1]
-
-        if w > self.aspect_ratio * h:
-            h = w * 1.0 / self.aspect_ratio
-        elif w < self.aspect_ratio * h:
-            w = h * self.aspect_ratio
-
-        scale = np.array(
-            [
-                w * 1.0 / self.pixel_std,
-                h * 1.0 / self.pixel_std
-            ],
-            dtype=np.float32
-        )
-
-        scale = scale * 1.5
-
-        return center, scale
-
     def __len__(self,):
         return len(self.db)
 
@@ -117,22 +71,10 @@ class JointsDataset(Dataset):
         filename = db_rec['filename'] if 'filename' in db_rec else ''
         imgnum = db_rec['imgnum'] if 'imgnum' in db_rec else ''
 
-        if self.data_format == 'zip':
-            from utils import zipreader
-            data_numpy = zipreader.imread(
-                image_file, cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION
-            )
-        else:
-            data_numpy = cv2.imread(
-                image_file, cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION
-            )
+        input = image_file
 
         if self.color_rgb:
-            data_numpy = cv2.cvtColor(data_numpy, cv2.COLOR_BGR2RGB)
-
-        if data_numpy is None:
-            logger.error('=> fail to read {}'.format(image_file))
-            raise ValueError('Fail to read {}'.format(image_file))
+            input = cv2.cvtColor(input, cv2.COLOR_BGR2RGB)
 
         joints = db_rec['joints_3d']
         joints_vis = db_rec['joints_3d_vis']
@@ -142,41 +84,22 @@ class JointsDataset(Dataset):
         score = db_rec['score'] if 'score' in db_rec else 1
         r = 0
 
-        if self.is_train:
-            if (np.sum(joints_vis[:, 0]) > self.num_joints_half_body
-                and np.random.rand() < self.prob_half_body):
-                c_half_body, s_half_body = self.half_body_transform(
-                    joints, joints_vis
-                )
-
-                if c_half_body is not None and s_half_body is not None:
-                    c, s = c_half_body, s_half_body
-
-            sf = self.scale_factor
-            rf = self.rotation_factor
-            s = s * np.clip(np.random.randn()*sf + 1, 1 - sf, 1 + sf)
-            r = np.clip(np.random.randn()*rf, -rf*2, rf*2) \
-                if random.random() <= 0.6 else 0
-
-            if self.flip and random.random() <= 0.5:
-                data_numpy = data_numpy[:, ::-1, :]
-                joints, joints_vis = fliplr_joints(
-                    joints, joints_vis, data_numpy.shape[1], self.flip_pairs)
-                c[0] = data_numpy.shape[1] - c[0] - 1
+        '''
 
         trans = get_affine_transform(c, s, r, self.image_size)
         input = cv2.warpAffine(
-            data_numpy,
+            input,
             trans,
             (int(self.image_size[0]), int(self.image_size[1])),
             flags=cv2.INTER_LINEAR)
 
-        if self.transform:
-            input = self.transform(input)
-
         for i in range(self.num_joints):
             if joints_vis[i, 0] > 0.0:
                 joints[i, 0:2] = affine_transform(joints[i, 0:2], trans)
+        '''
+
+        if self.transform:
+            input = self.transform(input)
 
         target, target_weight = self.generate_target(joints, joints_vis)
 
@@ -196,39 +119,6 @@ class JointsDataset(Dataset):
         }
 
         return input, target, target_weight, meta
-
-    def select_data(self, db):
-        db_selected = []
-        for rec in db:
-            num_vis = 0
-            joints_x = 0.0
-            joints_y = 0.0
-            for joint, joint_vis in zip(
-                    rec['joints_3d'], rec['joints_3d_vis']):
-                if joint_vis[0] <= 0:
-                    continue
-                num_vis += 1
-
-                joints_x += joint[0]
-                joints_y += joint[1]
-            if num_vis == 0:
-                continue
-
-            joints_x, joints_y = joints_x / num_vis, joints_y / num_vis
-
-            area = rec['scale'][0] * rec['scale'][1] * (self.pixel_std**2)
-            joints_center = np.array([joints_x, joints_y])
-            bbox_center = np.array(rec['center'])
-            diff_norm2 = np.linalg.norm((joints_center-bbox_center), 2)
-            ks = np.exp(-1.0*(diff_norm2**2) / ((0.2)**2*2.0*area))
-
-            metric = (0.2 / 16) * num_vis + 0.45 - 0.2 / 16
-            if ks > metric:
-                db_selected.append(rec)
-
-        logger.info('=> num db: {}'.format(len(db)))
-        logger.info('=> num selected db: {}'.format(len(db_selected)))
-        return db_selected
 
     def generate_target(self, joints, joints_vis):
         '''

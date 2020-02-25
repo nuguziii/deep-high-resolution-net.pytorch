@@ -25,7 +25,7 @@ import _init_paths
 from config import cfg
 from config import update_config
 from core.loss import JointsMSELoss
-from core.function import validate
+from core.function import test
 from utils.utils import create_logger
 
 import dataset
@@ -90,7 +90,7 @@ def main():
         model.load_state_dict(torch.load(cfg.TEST.MODEL_FILE), strict=False)
     else:
         model_state_file = os.path.join(
-            final_output_dir, 'final_state.pth'
+            final_output_dir, 'model_best.pth'
         )
         logger.info('=> loading model from {}'.format(model_state_file))
         model.load_state_dict(torch.load(model_state_file))
@@ -103,18 +103,15 @@ def main():
     ).cuda()
 
     # Data loading code
-    normalize = transforms.Normalize(
-        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-    )
-    valid_dataset = eval('dataset.'+cfg.DATASET.DATASET)(
-        cfg, cfg.DATASET.ROOT, cfg.DATASET.TEST_SET, False,
+    test_dataset = eval('dataset.' + cfg.DATASET.DATASET)(
+        cfg, cfg.DATASET.ROOT, cfg.DATASET.TEST_SET, 'test',
         transforms.Compose([
             transforms.ToTensor(),
-            normalize,
         ])
     )
-    valid_loader = torch.utils.data.DataLoader(
-        valid_dataset,
+
+    test_loader = torch.utils.data.DataLoader(
+        test_dataset,
         batch_size=cfg.TEST.BATCH_SIZE_PER_GPU*len(cfg.GPUS),
         shuffle=False,
         num_workers=cfg.WORKERS,
@@ -122,7 +119,7 @@ def main():
     )
 
     # evaluate on validation set
-    validate(cfg, valid_loader, valid_dataset, model, criterion,
+    test(cfg, test_loader, test_dataset, model, criterion,
              final_output_dir, tb_log_dir)
 
 
