@@ -78,6 +78,7 @@ class JointsDataset(Dataset):
 
         joints = db_rec['joints_3d']
         joints_vis = db_rec['joints_3d_vis']
+        visible = db_rec['visible']
 
         c = db_rec['center']
         s = db_rec['scale']
@@ -115,7 +116,8 @@ class JointsDataset(Dataset):
             'center': c,
             'scale': s,
             'rotation': r,
-            'score': score
+            'score': score,
+            'visible': visible
         }
 
         return input, target, target_weight, meta

@@ -126,14 +126,16 @@ class PANO(JointsDataset):
         rec = []
         joints_3d = np.zeros((self.num_joints, 3), dtype=np.float)
         joints_3d_vis = np.zeros((self.num_joints, 3), dtype=np.float)
+        visible = np.zeros((self.num_joints, 1), dtype=np.float)
+
         for ipt in range(self.num_joints):
             joints_3d[ipt, 0] = objs[ipt+1]["center"][0]
             joints_3d[ipt, 1] = objs[ipt+1]["center"][1]
             joints_3d[ipt, 2] = 0
-            t_vis = objs[ipt+1]['visible']
+            visible[ipt] = objs[ipt+1]['visible']
 
-            joints_3d_vis[ipt, 0] = t_vis
-            joints_3d_vis[ipt, 1] = t_vis
+            joints_3d_vis[ipt, 0] = 1
+            joints_3d_vis[ipt, 1] = 1
             joints_3d_vis[ipt, 2] = 0
 
         center, scale = self._box2cs(clean_bbox[:4])
@@ -145,6 +147,7 @@ class PANO(JointsDataset):
             'joints_3d_vis': joints_3d_vis,
             'filename': index,
             'imgnum': 0,
+            'visible': visible
         })
 
         return rec
