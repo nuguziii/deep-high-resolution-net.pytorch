@@ -50,8 +50,7 @@ def save_batch_image_with_joints(batch_image, batch_joints, batch_joints_vis,
             k = k + 1
     cv2.imwrite(file_name, ndarr)
 
-def save_image_with_joints(batch_image, batch_joints, batch_joints_vis,
-                                 file_name, meta):
+def save_image_with_joints(batch_joints, file_name, meta):
     '''
     batch_image: [1, channel, height, width]
     batch_joints: [1, num_joints, 3],
@@ -63,7 +62,7 @@ def save_image_with_joints(batch_image, batch_joints, batch_joints_vis,
     image = cv2.imread(meta["filename"][0], cv2.IMREAD_COLOR)
 
     joints = batch_joints[0]
-    joints_vis = batch_joints_vis[0]
+    joints_vis = meta['joints_vis'][0]
     joints_gt = meta['joints'][0]
 
     cv2.putText(image, 'pred', (250, 100), cv2.FONT_ITALIC, 1.5, [255, 0, 0], 3)
@@ -71,17 +70,24 @@ def save_image_with_joints(batch_image, batch_joints, batch_joints_vis,
     cv2.putText(image, 'gt', (250, 170), cv2.FONT_ITALIC, 1.5, [0, 255, 0], 3)
     cv2.circle(image, (200, 170), 3, [0, 255, 0], 2)
 
-    for joint, joint_vis, joint_gt in zip(joints, joints_vis, joints_gt):
+    for i, (joint, joint_vis, joint_gt) in enumerate(zip(joints, joints_vis, joints_gt)):
         #joint[0] = x * width + padding + joint[0]
         #joint[1] = y * height + padding + joint[1]
+
+        teeth_num = {1: '18', 2: '17', 3: '16', 4: '15', 5: '14', 6: '13', 7: '12', 8: '11',
+                     9: '21', 10: '22', 11: '23', 12: '24', 13: '25', 14: '26', 15: '27', 16: '28',
+                     17: '48', 18: '47', 19: '46', 20: '45', 21: '44', 22: '43', 23: '42', 24: '41',
+                     25: '31', 26: '32', 27: '33', 28: '34', 29: '35', 30: '36', 31: '37', 32: '38'}
+
         joint_coord = joint[:2]
         joint_gt_coord = joint_gt[:2]
         joint_coord = pano.getOriginalCoord(image, joint_coord)
         joint_gt_coord = pano.getOriginalCoord(image, joint_gt_coord)
 
-        if joint_vis[0]:
-            cv2.circle(image, (int(joint_coord[0]), int(joint_coord[1])), 2, [255, 0, 0], 2)
-            cv2.circle(image, (int(joint_gt_coord[0]), int(joint_gt_coord[1])), 2, [0,255, 0], 2)
+        #if joint_vis[0]:
+        cv2.putText(image, teeth_num[i+1], (int(joint_coord[0]), int(joint_coord[1])), cv2.FONT_ITALIC, 0.4, [255, 0, 0], 1)
+        cv2.circle(image, (int(joint_coord[0]), int(joint_coord[1])), 2, [255, 0, 0], 2)
+        cv2.circle(image, (int(joint_gt_coord[0]), int(joint_gt_coord[1])), 2, [0,255, 0], 2)
 
     cv2.imwrite(file_name, image)
 
@@ -184,22 +190,21 @@ def save_result_images(config, input, meta, target, joints_pred, output,
     if not os.path.exists(os.path.join(prefix, 'heatmap')):
         os.makedirs(os.path.join(prefix, 'heatmap'))
 
-    heatDir = '{}_{}'.format(os.path.join(prefix, 'heatmap', 'test'), i)
-    imgDir = '{}_{}'.format(os.path.join(prefix, 'test'), i)
+    heatDir = '{}_{}.jpg'.format(os.path.join(prefix, 'heatmap', 'test'), i)
+    imgDir = '{}_{}.jpg'.format(os.path.join(prefix, 'test'), i)
 
     if not config.DEBUG.DEBUG:
         return
 
     if config.DEBUG.SAVE_BATCH_IMAGES_PRED:
         save_image_with_joints(
-            input, joints_pred, meta['joints_vis'],
-            '{}.jpg'.format(imgDir), meta
+            joints_pred, imgDir, meta
         )
     if config.DEBUG.SAVE_HEATMAPS_GT:
         save_batch_heatmaps(
-            input, target, '{}_hm_gt.jpg'.format(heatDir)
+            input, target, heatDir
         )
     if config.DEBUG.SAVE_HEATMAPS_PRED:
         save_batch_heatmaps(
-            input, output, '{}_hm_pred.jpg'.format(heatDir)
+            input, output, heatDir
         )
