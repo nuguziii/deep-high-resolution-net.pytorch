@@ -38,6 +38,23 @@ class JointsMSELoss(nn.Module):
 
         return loss / num_joints
 
+class JointsCELoss(nn.Module):
+    def __init__(self):
+        super(JointsCELoss, self).__init__()
+        self.criterion = nn.MSELoss(reduction='mean').cuda()
+
+    def forward(self, output, target):
+        batch_size = output.size(0)
+        num_joints = output.size(1)
+        loss = 0
+
+        for idx in range(num_joints):
+            class_gt = target[:, idx].view(batch_size)
+            class_pred = output[:,idx]
+            loss += self.criterion(class_pred, class_gt)
+
+        return loss / num_joints
+
 
 class JointsOHKMMSELoss(nn.Module):
     def __init__(self, use_target_weight, topk=8):

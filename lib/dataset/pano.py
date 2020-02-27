@@ -124,19 +124,17 @@ class PANO(JointsDataset):
         clean_bbox = [0, 0, width, height]
 
         rec = []
-        joints_3d = np.zeros((self.num_joints, 3), dtype=np.float)
-        joints_3d_vis = np.zeros((self.num_joints, 3), dtype=np.float)
+        joints_3d = np.zeros((self.num_joints, 2), dtype=np.float)
+        joints_3d_vis = np.zeros((self.num_joints, 2), dtype=np.float)
         visible = np.zeros((self.num_joints, 1), dtype=np.float)
 
         for ipt in range(self.num_joints):
             joints_3d[ipt, 0] = objs[ipt+1]["center"][0]
             joints_3d[ipt, 1] = objs[ipt+1]["center"][1]
-            joints_3d[ipt, 2] = 0
             visible[ipt] = objs[ipt+1]['visible']
 
-            joints_3d_vis[ipt, 0] = 1
-            joints_3d_vis[ipt, 1] = 1
-            joints_3d_vis[ipt, 2] = 0
+            joints_3d_vis[ipt, 0] = visible[ipt]
+            joints_3d_vis[ipt, 1] = visible[ipt]
 
         center, scale = self._box2cs(clean_bbox[:4])
         rec.append({

@@ -24,7 +24,7 @@ import torchvision.transforms as transforms
 import _init_paths
 from config import cfg
 from config import update_config
-from core.loss import JointsMSELoss
+from core.loss import JointsMSELoss, JointsCELoss
 from core.function import test
 from utils.utils import create_logger
 
@@ -98,9 +98,12 @@ def main():
     model = torch.nn.DataParallel(model, device_ids=cfg.GPUS).cuda()
 
     # define loss function (criterion) and optimizer
-    criterion = JointsMSELoss(
-        use_target_weight=cfg.LOSS.USE_TARGET_WEIGHT
+    heatmapLoss = JointsMSELoss(
+        use_target_weight=cfg.LOSS.USE_TARGET_WEIGHT  # true
     ).cuda()
+
+    # classifierLoss = nn.MSELoss(reduction='mean').cuda()
+    classifierLoss = JointsCELoss().cuda()
 
     # Data loading code
     test_dataset = eval('dataset.' + cfg.DATASET.DATASET)(
@@ -119,7 +122,7 @@ def main():
     )
 
     # evaluate on validation set
-    test(cfg, test_loader, test_dataset, model, criterion,
+    test(cfg, test_loader, test_dataset, model, [heatmapLoss, classifierLoss],
              final_output_dir, tb_log_dir)
 
 

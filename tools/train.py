@@ -14,6 +14,7 @@ import pprint
 import shutil
 
 import torch
+import torch.nn as nn
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim
@@ -25,7 +26,7 @@ from tensorboardX import SummaryWriter
 import _init_paths
 from config import cfg
 from config import update_config
-from core.loss import JointsMSELoss
+from core.loss import JointsMSELoss, JointsCELoss
 from core.function import train
 from core.function import validate
 from utils.utils import get_optimizer
@@ -114,9 +115,13 @@ def main():
     model = torch.nn.DataParallel(model, device_ids=cfg.GPUS).cuda()
 
     # define loss function (criterion) and optimizer
-    criterion = JointsMSELoss(
+    heatmapLoss = JointsMSELoss(
         use_target_weight=cfg.LOSS.USE_TARGET_WEIGHT #true
     ).cuda()
+
+    #classifierLoss = nn.MSELoss(reduction='mean').cuda()
+    classifierLoss = JointsCELoss().cuda()
+    lmloss = nn.MSELoss(reduction='mean').cuda()
 
     # Data loading code
     train_dataset = eval('dataset.'+cfg.DATASET.DATASET)(
@@ -178,13 +183,13 @@ def main():
         lr_scheduler.step()
 
         # train for one epoch
-        train(cfg, train_loader, model, criterion, optimizer, epoch,
+        train(cfg, train_loader, model, [heatmapLoss, classifierLoss, lmloss], optimizer, epoch,
               final_output_dir, tb_log_dir, writer_dict)
 
 
         # evaluate on validation set
         perf_indicator = validate(
-            cfg, valid_loader, valid_dataset, model, criterion,
+            cfg, valid_loader, valid_dataset, model, [heatmapLoss, classifierLoss, lmloss],
             final_output_dir, tb_log_dir, writer_dict
         )
 

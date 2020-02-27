@@ -70,4 +70,45 @@ def accuracy(output, target, hm_type='gaussian', thr=0.5):
         acc[0] = avg_acc
     return acc, avg_acc, cnt, pred
 
+def accuracy_classification(output, target, thres=0.0):
+    '''
+    Calculate accuracy according to PCK,
+    but uses ground truth heatmap rather than x,y locations
+    First value to be returned is average accuracy across 'idxs',
+    followed by individual accuracies
+    '''
+
+    output[output<thres] = 0
+    output[output>=thres] = 1
+
+    cnt = output.shape[0]
+    acc = np.zeros(cnt)
+
+    target = target.reshape(cnt, -1)
+
+    for i in range(cnt):
+        acc[i] = sum(output[i]==target[i])/32
+
+    avg_acc = np.mean(acc)
+    return avg_acc, cnt
+
+def accuracy_landmark(output, target):
+    '''
+    Calculate accuracy according to PCK,
+    but uses ground truth heatmap rather than x,y locations
+    First value to be returned is average accuracy across 'idxs',
+    followed by individual accuracies
+    '''
+
+    cnt = output.shape[0]
+    acc = np.zeros(cnt)
+
+    target = target.reshape(cnt, -1)
+
+    for i in range(cnt):
+        acc[i] = sum(output[i]==target[i])/32
+
+    avg_acc = np.mean(acc)
+    return avg_acc, cnt
+
 

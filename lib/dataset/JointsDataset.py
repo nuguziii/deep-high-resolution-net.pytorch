@@ -85,6 +85,7 @@ class JointsDataset(Dataset):
         score = db_rec['score'] if 'score' in db_rec else 1
         r = 0
 
+
         '''
 
         trans = get_affine_transform(c, s, r, self.image_size)

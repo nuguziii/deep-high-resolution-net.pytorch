@@ -13,6 +13,7 @@ import logging
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 BN_MOMENTUM = 0.1
@@ -320,13 +321,32 @@ class PoseHighResolutionNet(nn.Module):
         self.stage4, pre_stage_channels = self._make_stage(
             self.stage4_cfg, num_channels, multi_scale_output=False)
 
-        self.final_layer = nn.Conv2d(
+        self.final_layer_heatmap = nn.Conv2d(
             in_channels=pre_stage_channels[0],
             out_channels=cfg.MODEL.NUM_JOINTS,
             kernel_size=extra.FINAL_CONV_KERNEL,
             stride=1,
             padding=1 if extra.FINAL_CONV_KERNEL == 3 else 0
         )
+
+        self.getFeature = nn.Conv2d(
+            in_channels=pre_stage_channels[0],
+            out_channels=cfg.MODEL.NUM_JOINTS,
+            kernel_size=extra.FINAL_CONV_KERNEL,
+            stride=1,
+            padding=1 if extra.FINAL_CONV_KERNEL == 3 else 0
+        )
+        self.classifier = nn.Linear(cfg.MODEL.NUM_JOINTS, cfg.MODEL.NUM_JOINTS)
+        self.softmax = nn.Softmax(dim=1)
+
+        self.getFeature2 = nn.Conv2d(
+            in_channels=pre_stage_channels[0],
+            out_channels=cfg.MODEL.NUM_JOINTS*2,
+            kernel_size=extra.FINAL_CONV_KERNEL,
+            stride=1,
+            padding=1 if extra.FINAL_CONV_KERNEL == 3 else 0
+        )
+        self.final_layer_coord = nn.Linear(cfg.MODEL.NUM_JOINTS*2, cfg.MODEL.NUM_JOINTS*2)
 
         self.pretrained_layers = cfg['MODEL']['EXTRA']['PRETRAINED_LAYERS']
 
@@ -455,9 +475,19 @@ class PoseHighResolutionNet(nn.Module):
                 x_list.append(y_list[i])
         y_list = self.stage4(x_list)
 
-        x = self.final_layer(y_list[0])
+        heatmap = self.final_layer_heatmap(y_list[0])
 
-        return x
+        features1 = self.getFeature(y_list[0])
+        gap = F.adaptive_avg_pool2d(features1, (1,1))
+        flatten = gap.view(gap.size(0),-1)
+        classification = self.classifier(flatten)
+        classification = self.softmax(classification)
+
+        features2 = self.getFeature2(y_list[0])
+        features2 = F.adaptive_avg_pool2d(features2, (1,1)).view(gap.size(0),-1)
+        landmark = self.final_layer_coord(features2)
+
+        return classification, landmark
 
     def init_weights(self, pretrained=''):
         logger.info('=> init weights from normal distribution')
