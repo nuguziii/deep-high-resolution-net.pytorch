@@ -29,9 +29,6 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
-    loss_classifier = AverageMeter()
-    loss_heatmap = AverageMeter()
-    loss_landmark = AverageMeter()
     acc = AverageMeter()
 
     # switch to train mode
@@ -43,27 +40,19 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
         data_time.update(time.time() - end)
 
         # compute output
-        heatmap, classification, landmark = model(input)
+        heatmap = model(input)
 
         target = target.cuda(non_blocking=True)
         target_weight = target_weight.cuda(non_blocking=True)
 
         if isinstance(heatmap, list):
-            heatloss = criterion[0](heatmap[0], target, target_weight)
+            loss = criterion[0](heatmap[0], target, target_weight)
             for output in heatmap[1:]:
-                heatloss += criterion[0](output, target, target_weight)
+                loss += criterion[0](output, target, target_weight)
         else:
             output = heatmap
-            heatloss = criterion[0](output, target, target_weight)
+            loss = criterion[0](output, target, target_weight)
 
-        #target2 = meta["visible"].type(torch.FloatTensor).cuda(non_blocking=True).view(classification.size(0),-1)
-        target2 = meta["visible"].type(torch.FloatTensor).cuda(non_blocking=True)
-        classloss = criterion[1](classification, target2)
-
-        target3 = meta["joints"].reshape(-1,64).type(torch.FloatTensor).cuda(non_blocking=True)
-        lmloss = criterion[2](landmark, target3)
-
-        loss = config.TRAIN.LOSS_WEIGHT[1]*classloss + config.TRAIN.LOSS_WEIGHT[2]*lmloss
         # loss = criterion(output, target, target_weight)
 
         # compute gradient and do update step
@@ -73,9 +62,6 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
 
         # measure accuracy and record loss
         losses.update(loss.item(), input.size(0))
-        loss_classifier.update(classloss.item(), input.size(0))
-        loss_heatmap.update(heatloss.item(), input.size(0))
-        loss_landmark.update(lmloss.item(), input.size(0))
 
         _, avg_acc, cnt, pred = accuracy(output.detach().cpu().numpy(),
                                          target.detach().cpu().numpy())
@@ -90,12 +76,12 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
                   'Time {batch_time.val:.3f}s ({batch_time.avg:.3f}s)\t' \
                   'Speed {speed:.1f} samples/s\t' \
                   'Data {data_time.val:.3f}s ({data_time.avg:.3f}s)\t' \
-                  'Loss {loss.val:.5f} ({loss.avg:.5f}) ({classific.avg: .5f}+{lm.avg: .5f})\t' \
+                  'Loss {loss.val:.5f} ({loss.avg:.5f})\t' \
                   'Accuracy(heatmap) {acc.val:.3f} ({acc.avg:.3f})'.format(
                       epoch, i, len(train_loader), batch_time=batch_time,
                       speed=input.size(0)/batch_time.val,
                       data_time=data_time,
-                      loss=losses, classific=loss_classifier, lm=loss_landmark,
+                      loss=losses,
                       acc=acc)
             logger.info(msg)
 
@@ -127,7 +113,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
         end = time.time()
         for i, (input, target, target_weight, meta) in enumerate(val_loader):
             # compute output
-            heatmap, classification, landmark = model(input)
+            heatmap  = model(input)
             if isinstance(heatmap, list):
                 output = heatmap[-1]
             else:
@@ -157,11 +143,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             target = target.cuda(non_blocking=True)
             target_weight = target_weight.cuda(non_blocking=True)
 
-            target2 = meta["visible"].type(torch.FloatTensor).cuda(non_blocking=True)
-            target3 = meta["joints"].reshape(-1, 64).type(torch.FloatTensor).cuda(non_blocking=True)
-
-            loss = config.TRAIN.LOSS_WEIGHT[1]*criterion[1](classification, target2) \
-                 + config.TRAIN.LOSS_WEIGHT[2] * criterion[2](landmark, target3)
+            loss = criterion[0](output, target, target_weight)
 
             num_images = input.size(0)
             # measure accuracy and record loss
@@ -208,14 +190,13 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
                 save_debug_images(config, input, meta, target, pred*4, output,
                                   prefix)
 
-    return 0
+    return acc.avg
 
 def test(config, val_loader, val_dataset, model, criterion, output_dir,
              tb_log_dir, writer_dict=None):
     batch_time = AverageMeter()
     losses = AverageMeter()
     acc = AverageMeter()
-    acc_clas = AverageMeter()
 
     # switch to evaluate mode
     model.eval()
@@ -234,7 +215,7 @@ def test(config, val_loader, val_dataset, model, criterion, output_dir,
         end = time.time()
         for i, (input, target, target_weight, meta) in enumerate(val_loader):
             # compute output
-            heatmap, classification = model(input)
+            heatmap = model(input)
             if isinstance(heatmap, list):
                 output = heatmap[-1]
             else:
@@ -266,7 +247,7 @@ def test(config, val_loader, val_dataset, model, criterion, output_dir,
 
             target_class = meta["visible"].type(torch.FloatTensor).cuda(non_blocking=True)
 
-            loss = config.TRAIN.LOSS_WEIGHT[0]*criterion[0](output, target, target_weight) + criterion[1](classification,target_class)
+            loss = criterion[0](output, target, target_weight)
 
             num_images = input.size(0)
             # measure accuracy and record loss
@@ -274,10 +255,6 @@ def test(config, val_loader, val_dataset, model, criterion, output_dir,
             _, avg_acc, cnt, pred = accuracy(output.cpu().numpy(),
                                              target.cpu().numpy())
             acc.update(avg_acc, cnt)
-
-            avg_acc, cnt = accuracy_classification(classification.cpu().numpy(),
-                                                   target_class.cpu().numpy())
-            acc_clas.update(avg_acc, cnt)
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -305,10 +282,9 @@ def test(config, val_loader, val_dataset, model, criterion, output_dir,
                 msg = 'Test: [{0}/{1}]\t' \
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t' \
-                      'Accuracy {acc.val:.3f} ({acc.avg:.3f})\t'\
-                      'Accuracy {acc2.val:.3f} ({acc2.avg:.3f})'.format(
+                      'Accuracy {acc.val:.3f} ({acc.avg:.3f})'.format(
                           i, len(val_loader), batch_time=batch_time,
-                          loss=losses, acc=acc, acc2=acc_clas)
+                          loss=losses, acc=acc)
                 logger.info(msg)
 
                 prefix = os.path.join(output_dir, 'result')

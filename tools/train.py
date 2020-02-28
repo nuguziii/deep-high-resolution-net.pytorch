@@ -196,6 +196,12 @@ def main():
         if perf_indicator >= best_perf:
             best_perf = perf_indicator
             best_model = True
+            best_model_state_file = os.path.join(
+                final_output_dir, 'best_model.pth'
+            )
+            logger.info('=> saving best model state to {}'.format(
+                best_model_state_file)
+            )
         else:
             best_model = False
 
