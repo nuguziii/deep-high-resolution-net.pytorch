@@ -27,8 +27,10 @@ import _init_paths
 from config import cfg
 from config import update_config
 from core.loss import JointsMSELoss, JointsCELoss
-from core.function import train
-from core.function import validate
+#from core.function import train
+#from core.function import validate
+from core.function_plus import train
+from core.function_plus import validate
 from utils.utils import get_optimizer
 from utils.utils import save_checkpoint
 from utils.utils import create_logger
@@ -183,13 +185,13 @@ def main():
         lr_scheduler.step()
 
         # train for one epoch
-        train(cfg, train_loader, model, [heatmapLoss, classifierLoss, lmloss], optimizer, epoch,
+        train(cfg, train_loader, model, [classifierLoss, lmloss], optimizer, epoch,
               final_output_dir, tb_log_dir, writer_dict)
 
 
         # evaluate on validation set
         perf_indicator = validate(
-            cfg, valid_loader, valid_dataset, model, [heatmapLoss, classifierLoss, lmloss],
+            cfg, valid_loader, valid_dataset, model, [classifierLoss, lmloss],
             final_output_dir, tb_log_dir, writer_dict
         )
 
