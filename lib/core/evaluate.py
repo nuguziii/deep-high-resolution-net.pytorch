@@ -92,23 +92,27 @@ def accuracy_classification(output, target, thres=0.0):
     avg_acc = np.mean(acc)
     return avg_acc, cnt
 
-def accuracy_landmark(output, target):
+def accuracy_landmark(output, target, thres=6.0):
     '''
     Calculate accuracy according to PCK,
     but uses ground truth heatmap rather than x,y locations
     First value to be returned is average accuracy across 'idxs',
     followed by individual accuracies
     '''
+    batch = output.shape[0]
+    acc = np.zeros(batch)
 
-    cnt = output.shape[0]
-    acc = np.zeros(cnt)
+    output = output.reshape(batch, 32, 2)
+    target = target.reshape(batch, 32, 2)
 
-    target = target.reshape(cnt, -1)
+    diff = np.sqrt(np.square(output[:,:,0] - target[:,:,0]) + np.square(output[:,:,1] - target[:,:,1]))
 
-    for i in range(cnt):
-        acc[i] = sum(output[i]==target[i])/32
+    for i in range(batch):
+        cur = diff[i]
+        cur[cur < thres] = 0
+        acc[i] = (32-np.count_nonzero(cur))/32
 
     avg_acc = np.mean(acc)
-    return avg_acc, cnt
+    return avg_acc, batch
 
 

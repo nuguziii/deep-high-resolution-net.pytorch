@@ -84,10 +84,20 @@ def save_image_with_joints(batch_joints, file_name, meta):
         joint_coord = pano.getOriginalCoord(image, joint_coord)
         joint_gt_coord = pano.getOriginalCoord(image, joint_gt_coord)
 
-        #if joint_vis[0]:
-        cv2.putText(image, teeth_num[i+1], (int(joint_coord[0]), int(joint_coord[1])), cv2.FONT_ITALIC, 0.4, [255, 0, 0], 1)
-        cv2.circle(image, (int(joint_coord[0]), int(joint_coord[1])), 2, [255, 0, 0], 2)
-        cv2.circle(image, (int(joint_gt_coord[0]), int(joint_gt_coord[1])), 2, [0,255, 0], 2)
+        if joint_vis[0]:
+            cv2.putText(image, teeth_num[i+1], (int(joint_coord[0])+4, int(joint_coord[1])+4), cv2.FONT_ITALIC, 0.4,
+                        [255, 0, 0], 1)
+            cv2.circle(image, (int(joint_coord[0]), int(joint_coord[1])), 2, [255, 0, 0], 2)
+            cv2.putText(image, teeth_num[i + 1], (int(joint_gt_coord[0])+4, int(joint_gt_coord[1])+4), cv2.FONT_ITALIC, 0.4,
+                        [0,255, 0], 1)
+            cv2.circle(image, (int(joint_gt_coord[0]), int(joint_gt_coord[1])), 1, [0,255, 0], 2)
+        else:
+            cv2.putText(image, teeth_num[i + 1], (int(joint_coord[0])+4, int(joint_coord[1])+4), cv2.FONT_ITALIC, 0.4,
+                        [255, 255, 0], 1)
+            cv2.circle(image, (int(joint_coord[0]), int(joint_coord[1])), 2, [255, 255, 0], 2)
+            cv2.putText(image, teeth_num[i + 1], (int(joint_gt_coord[0])+4, int(joint_gt_coord[1])+4), cv2.FONT_ITALIC, 0.4,
+                        [0, 255, 255], 1)
+            cv2.circle(image, (int(joint_gt_coord[0]), int(joint_gt_coord[1])), 1, [0, 255, 255], 2)
 
     cv2.imwrite(file_name, image)
 
@@ -208,3 +218,60 @@ def save_result_images(config, input, meta, target, joints_pred, output,
         save_batch_heatmaps(
             input, output, heatDir
         )
+
+def save_images_landmark(meta, batch_landmark, batch_classification, prefix, i):
+    '''
+        batch_image: [1, channel, height, width]
+        batch_landmark: [1, 64],
+        batch_classification: [1, 32],
+        batch_joints: [1, 32, 3],
+    '''
+
+    if not os.path.exists(prefix):
+        os.makedirs(prefix)
+
+    file_name = '{}_{}.jpg'.format(os.path.join(prefix, 'test'), i)
+
+    pano = PANODataset(None)
+    image = cv2.imread(meta["filename"][0], cv2.IMREAD_COLOR)
+
+    joints_gt = meta['joints'][0]
+
+    cv2.putText(image, 'pred', (250, 100), cv2.FONT_ITALIC, 1.5, [255, 0, 0], 3)
+    cv2.circle(image, (200, 100), 3, [255, 0, 0], 2)
+    cv2.putText(image, 'gt', (250, 170), cv2.FONT_ITALIC, 1.5, [0, 255, 0], 3)
+    cv2.circle(image, (200, 170), 3, [0, 255, 0], 2)
+
+    batch_landmark = batch_landmark.reshape(1, 32, 2)
+
+    for i, (joint_gt) in enumerate(joints_gt):
+
+        teeth_num = {1: '18', 2: '17', 3: '16', 4: '15', 5: '14', 6: '13', 7: '12', 8: '11',
+                     9: '21', 10: '22', 11: '23', 12: '24', 13: '25', 14: '26', 15: '27', 16: '28',
+                     17: '48', 18: '47', 19: '46', 20: '45', 21: '44', 22: '43', 23: '42', 24: '41',
+                     25: '31', 26: '32', 27: '33', 28: '34', 29: '35', 30: '36', 31: '37', 32: '38'}
+
+        joint_gt_coord = joint_gt[:2]
+        joint_gt_coord = pano.getOriginalCoord(image, joint_gt_coord)
+
+        joint_lm = batch_landmark[0][i]
+        joint_lm = pano.getOriginalCoord(image, joint_lm)
+
+        cls = batch_classification[0][i]
+
+        if cls>0:
+            cv2.putText(image, teeth_num[i+1], (int(joint_lm[0])+4, int(joint_lm[1])+4), cv2.FONT_ITALIC, 0.4,
+                        [255, 0, 0], 1)
+            cv2.circle(image, (int(joint_lm[0]), int(joint_lm[1])), 2, [255, 0, 0], 2)
+            cv2.putText(image, teeth_num[i + 1], (int(joint_gt_coord[0])+4, int(joint_gt_coord[1])+4), cv2.FONT_ITALIC, 0.4,
+                        [0,255, 0], 1)
+            cv2.circle(image, (int(joint_gt_coord[0]), int(joint_gt_coord[1])), 1, [0,255, 0], 2)
+        else:
+            cv2.putText(image, teeth_num[i + 1], (int(joint_lm[0])+4, int(joint_lm[1])+4), cv2.FONT_ITALIC, 0.4,
+                        [255, 255, 0], 1)
+            cv2.circle(image, (int(joint_lm[0]), int(joint_lm[1])), 2, [255, 255, 0], 2)
+            cv2.putText(image, teeth_num[i + 1], (int(joint_gt_coord[0])+4, int(joint_gt_coord[1])+4), cv2.FONT_ITALIC, 0.4,
+                        [0, 255, 255], 1)
+            cv2.circle(image, (int(joint_gt_coord[0]), int(joint_gt_coord[1])), 1, [0, 255, 255], 2)
+
+    cv2.imwrite(file_name, image)

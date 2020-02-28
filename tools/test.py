@@ -14,6 +14,7 @@ import os
 import pprint
 
 import torch
+import torch.nn as nn
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim
@@ -25,7 +26,7 @@ import _init_paths
 from config import cfg
 from config import update_config
 from core.loss import JointsMSELoss, JointsCELoss
-from core.function import test
+from core.function_plus import test
 from utils.utils import create_logger
 
 import dataset
@@ -104,6 +105,7 @@ def main():
 
     # classifierLoss = nn.MSELoss(reduction='mean').cuda()
     classifierLoss = JointsCELoss().cuda()
+    lmloss = nn.MSELoss(reduction='mean').cuda()
 
     # Data loading code
     test_dataset = eval('dataset.' + cfg.DATASET.DATASET)(
@@ -122,7 +124,7 @@ def main():
     )
 
     # evaluate on validation set
-    test(cfg, test_loader, test_dataset, model, [heatmapLoss, classifierLoss],
+    test(cfg, test_loader, test_dataset, model, [classifierLoss, lmloss],
              final_output_dir, tb_log_dir)
 
 
