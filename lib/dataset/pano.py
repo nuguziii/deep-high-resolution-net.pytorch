@@ -79,7 +79,7 @@ class PANO(JointsDataset):
         )
 
         print('==> initializing pano {} data.'.format(state))
-        self.annot_path = os.path.join('C:\\Users\CGIP\Desktop\CenterNet\data\pano', state)
+        self.annot_path = os.path.join('C:\\Users\CGIP\Desktop\github\CenterNet\data\pano', state)
         self.pano = pano.PANODataset(self.annot_path)
 
         # load image file names

@@ -259,7 +259,7 @@ def save_images_landmark(meta, batch_landmark, batch_classification, prefix, i):
 
         cls = batch_classification[0][i]
 
-        if cls>0:
+        if True:
             cv2.putText(image, teeth_num[i+1], (int(joint_lm[0])+4, int(joint_lm[1])+4), cv2.FONT_ITALIC, 0.4,
                         [255, 0, 0], 1)
             cv2.circle(image, (int(joint_lm[0]), int(joint_lm[1])), 2, [255, 0, 0], 2)

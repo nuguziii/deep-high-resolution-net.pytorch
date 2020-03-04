@@ -175,7 +175,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
 
             idx += num_images
 
-            if i % config.PRINT_FREQ == 0:
+            if i % 100 == 0:
                 msg = 'Test: [{0}/{1}]\t' \
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t' \

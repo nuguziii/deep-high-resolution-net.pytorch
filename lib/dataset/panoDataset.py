@@ -25,9 +25,14 @@ class PANODataset:
 
     def loadData(self, file):
         original_img = self._loadImg(file)
-        img, anns = self._cropImg(original_img, self._loadAnn(file))
+        anns, mask = self._loadAnn(file)
+        img, anns = self._cropImg(original_img, anns)
         img, anns = self._resize(img, anns)
         img = self._normalize(img)
+
+        #mask = self._normalize(self._resize(self._cropImg(mask)))
+        #cv2.imshow('result', mask)
+        #cv2.waitKey(0)
 
         return img, anns
 
@@ -95,10 +100,13 @@ class PANODataset:
         inp = (inp - mean) / std
         return inp
 
-    def _resize(self, img, anns):
+    def _resize(self, img, anns=None):
         img_new = cv2.resize(img, (512, 256), interpolation=cv2.INTER_CUBIC)
         fx = np.size(img, 1) / 512
         fy = np.size(img, 0) / 256
+
+        if anns==None:
+            return img_new
 
         for ipt in range(1, self.num_joints+1):
             anns[ipt]["bbox"] = (anns[ipt]["bbox"]/np.array([fx, fy, fx, fy])).astype(int)
@@ -106,7 +114,7 @@ class PANODataset:
 
         return img_new, anns
 
-    def _cropImg(self, img, anns):
+    def _cropImg(self, img, anns=None):
         width = np.size(img, 1)
         height = np.size(img, 0)
 
@@ -129,13 +137,16 @@ class PANODataset:
         diffW = int((width-newW)/2)
         img = img[diffH:diffH+newH,diffW:diffW+newW,:]
 
+        if anns==None:
+            return img
+
         for ipt in range(1, self.num_joints+1):
             anns[ipt]["bbox"] = anns[ipt]["bbox"] - np.array([diffW + self.w_pad, diffH + self.h_pad, diffW + self.w_pad, diffH + self.h_pad])
             anns[ipt]["center"] = anns[ipt]["center"] - np.array([diffW + self.w_pad, diffH + self.h_pad])
 
         return img, anns
 
-    def _loadAnn(self, file, isBinary=False):
+    def _loadAnn(self, file):
         '''
         :param file: pano jpg image path
         :return data: { 1 : {"bbox":[(0,0),(0,0),(0,0),(0,0)], "center":(0,0), "visible":1/0} , 2: {} , ... }
@@ -149,20 +160,23 @@ class PANODataset:
         f = open(file.replace('jpg', 'txt'), 'r')
         txt = f.readlines()
         f.close()
-        for t in txt:
+
+        for idx, t in enumerate(txt):
             dict = {}
             t = t.replace('\n', '').split(', ')
 
             x_coord = []
             y_coord = []
+            coords = np.zeros((8, 2), np.int32)
 
             for i in range(8):
+                coords[i] = [centerX + int(t[2 * i + 3]), centerY + int(t[2 * i + 4])]
                 x_coord.append(centerX + int(t[2 * i + 3]))
                 y_coord.append(centerY + int(t[2 * i + 4]))
 
-            coords = [min(x_coord), min(y_coord), max(x_coord), max(y_coord)]  # minX, minY, maxX, maxY
+            bboxcoords = [min(x_coord), min(y_coord), max(x_coord), max(y_coord)]  # minX, minY, maxX, maxY
 
-            dict["bbox"] = np.array([coords[0], coords[1], coords[2], coords[3]])  # from top-left corner, clockwise
+            dict["bbox"] = np.array([bboxcoords[0], bboxcoords[1], bboxcoords[2], bboxcoords[3]])  # from top-left corner, clockwise
             dict["center"] = np.array([centerX + int(t[27]), centerY + int(t[28])])
 
             if t[1]=='True':
@@ -170,9 +184,22 @@ class PANODataset:
             else:
                 dict["visible"] = 0
 
+            dict["mask"] = coords
+
             data[teeth_num[t[0]]] = dict
 
-        return data
+        mask = self.getSegMask(np.zeros_like(img), data)
+
+        return data, mask
+
+    def getSegMask(self, img, data):
+        for i in range(1, 33):
+            visible = data[i]["visible"]
+            mask = data[i]["mask"]
+            if visible==1:
+                cv2.fillConvexPoly(img, mask, (255,0,0))
+
+        return img
 
     def showImage(self, img, anns):
         for ann in anns:

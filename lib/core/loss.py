@@ -55,6 +55,25 @@ class JointsCELoss(nn.Module):
 
         return loss / num_joints
 
+class JointsDistLoss(nn.Module):
+    def __init__(self):
+        super(JointsDistLoss, self).__init__()
+        self.criterion = nn.MSELoss(reduction='mean').cuda()
+
+    def forward(self, output, target):
+        batch = output.size(0)
+        num_joints = output.size(1)
+
+        output = output.reshape(batch, 32, 2)
+        target = target.reshape(batch, 32, 2)
+
+        loss = self.criterion(output[:, :, 0], target[:, :, 0]) + 0.3*self.criterion(output[:, :, 1], target[:, :, 1])
+
+        #diff = [batch, 32]
+        #diff = torch.sqrt((output[:, :, 0] - target[:, :, 0])**2 + (output[:, :, 1] - target[:, :, 1])**2)
+
+        return loss
+
 
 class JointsOHKMMSELoss(nn.Module):
     def __init__(self, use_target_weight, topk=8):
