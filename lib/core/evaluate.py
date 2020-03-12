@@ -28,7 +28,7 @@ def calc_dists(preds, target, normalize):
     return dists
 
 
-def dist_acc(dists, thr=0.5):
+def dist_acc(dists, thr=0.2):
     ''' Return percentage below threshold while ignoring values with a -1 '''
     dist_cal = np.not_equal(dists, -1)
     num_dist_cal = dist_cal.sum()
@@ -69,5 +69,50 @@ def accuracy(output, target, hm_type='gaussian', thr=0.5):
     if cnt != 0:
         acc[0] = avg_acc
     return acc, avg_acc, cnt, pred
+
+def accuracy_classification(output, target, thres=0.0):
+    '''
+    Calculate accuracy according to PCK,
+    but uses ground truth heatmap rather than x,y locations
+    First value to be returned is average accuracy across 'idxs',
+    followed by individual accuracies
+    '''
+
+    output[output<thres] = 0
+    output[output>=thres] = 1
+
+    cnt = output.shape[0]
+    acc = np.zeros(cnt)
+
+    target = target.reshape(cnt, -1)
+
+    for i in range(cnt):
+        acc[i] = sum(output[i]==target[i])/32
+
+    avg_acc = np.mean(acc)
+    return avg_acc, cnt
+
+def accuracy_landmark(output, target, thres=6.0):
+    '''
+    Calculate accuracy according to PCK,
+    but uses ground truth heatmap rather than x,y locations
+    First value to be returned is average accuracy across 'idxs',
+    followed by individual accuracies
+    '''
+    batch = output.shape[0]
+    acc = np.zeros(batch)
+
+    output = output.reshape(batch, 32, 2)
+    target = target.reshape(batch, 32, 2)
+
+    diff = np.sqrt(np.square(output[:,:,0] - target[:,:,0]) + np.square(output[:,:,1] - target[:,:,1]))
+
+    for i in range(batch):
+        cur = diff[i]
+        cur[cur < thres] = 0
+        acc[i] = (32-np.count_nonzero(cur))/32
+
+    avg_acc = np.mean(acc)
+    return avg_acc, batch
 
 

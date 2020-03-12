@@ -14,6 +14,7 @@ import pprint
 import shutil
 
 import torch
+import torch.nn as nn
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim
@@ -25,7 +26,9 @@ from tensorboardX import SummaryWriter
 import _init_paths
 from config import cfg
 from config import update_config
-from core.loss import JointsMSELoss
+from core.loss import JointsMSELoss, JointsCELoss, JointsDistLoss
+#from core.function import train
+#from core.function import validate
 from core.function import train
 from core.function import validate
 from utils.utils import get_optimizer
@@ -99,42 +102,30 @@ def main():
         final_output_dir)
     # logger.info(pprint.pformat(model))
 
-    writer_dict = {
-        'writer': SummaryWriter(log_dir=tb_log_dir),
-        'train_global_steps': 0,
-        'valid_global_steps': 0,
-    }
-
     dump_input = torch.rand(
         (1, 3, cfg.MODEL.IMAGE_SIZE[1], cfg.MODEL.IMAGE_SIZE[0])
     )
-    writer_dict['writer'].add_graph(model, (dump_input, ))
 
     logger.info(get_model_summary(model, dump_input))
 
     model = torch.nn.DataParallel(model, device_ids=cfg.GPUS).cuda()
 
     # define loss function (criterion) and optimizer
-    criterion = JointsMSELoss(
-        use_target_weight=cfg.LOSS.USE_TARGET_WEIGHT
+    heatmapLoss = JointsMSELoss(
+        use_target_weight=cfg.LOSS.USE_TARGET_WEIGHT #true
     ).cuda()
 
     # Data loading code
-    normalize = transforms.Normalize(
-        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-    )
     train_dataset = eval('dataset.'+cfg.DATASET.DATASET)(
-        cfg, cfg.DATASET.ROOT, cfg.DATASET.TRAIN_SET, True,
+        cfg, cfg.DATASET.ROOT, cfg.DATASET.TRAIN_SET, 'train',
         transforms.Compose([
             transforms.ToTensor(),
-            normalize,
         ])
     )
     valid_dataset = eval('dataset.'+cfg.DATASET.DATASET)(
-        cfg, cfg.DATASET.ROOT, cfg.DATASET.TEST_SET, False,
+        cfg, cfg.DATASET.ROOT, cfg.DATASET.TEST_SET, 'val',
         transforms.Compose([
             transforms.ToTensor(),
-            normalize,
         ])
     )
 
@@ -143,14 +134,15 @@ def main():
         batch_size=cfg.TRAIN.BATCH_SIZE_PER_GPU*len(cfg.GPUS),
         shuffle=cfg.TRAIN.SHUFFLE,
         num_workers=cfg.WORKERS,
-        pin_memory=cfg.PIN_MEMORY
+        pin_memory=True
     )
+
     valid_loader = torch.utils.data.DataLoader(
         valid_dataset,
-        batch_size=cfg.TEST.BATCH_SIZE_PER_GPU*len(cfg.GPUS),
+        batch_size=cfg.TRAIN.BATCH_SIZE_PER_GPU * len(cfg.GPUS),
         shuffle=False,
         num_workers=cfg.WORKERS,
-        pin_memory=cfg.PIN_MEMORY
+        pin_memory=True
     )
 
     best_perf = 0.0
@@ -183,19 +175,25 @@ def main():
         lr_scheduler.step()
 
         # train for one epoch
-        train(cfg, train_loader, model, criterion, optimizer, epoch,
-              final_output_dir, tb_log_dir, writer_dict)
+        train(cfg, train_loader, model, heatmapLoss, optimizer, epoch,
+              final_output_dir)
 
 
         # evaluate on validation set
         perf_indicator = validate(
-            cfg, valid_loader, valid_dataset, model, criterion,
-            final_output_dir, tb_log_dir, writer_dict
+            cfg, valid_loader, valid_dataset, model, heatmapLoss,
+            final_output_dir
         )
 
         if perf_indicator >= best_perf:
             best_perf = perf_indicator
             best_model = True
+            best_model_state_file = os.path.join(
+                final_output_dir, 'best_model.pth'
+            )
+            logger.info('=> saving best model state to {}'.format(
+                best_model_state_file)
+            )
         else:
             best_model = False
 
@@ -216,7 +214,6 @@ def main():
         final_model_state_file)
     )
     torch.save(model.module.state_dict(), final_model_state_file)
-    writer_dict['writer'].close()
 
 
 if __name__ == '__main__':
