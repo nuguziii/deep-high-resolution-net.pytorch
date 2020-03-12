@@ -102,12 +102,6 @@ def main():
         final_output_dir)
     # logger.info(pprint.pformat(model))
 
-    writer_dict = {
-        'writer': SummaryWriter(log_dir=tb_log_dir),
-        'train_global_steps': 0,
-        'valid_global_steps': 0,
-    }
-
     dump_input = torch.rand(
         (1, 3, cfg.MODEL.IMAGE_SIZE[1], cfg.MODEL.IMAGE_SIZE[0])
     )
@@ -120,11 +114,6 @@ def main():
     heatmapLoss = JointsMSELoss(
         use_target_weight=cfg.LOSS.USE_TARGET_WEIGHT #true
     ).cuda()
-
-    #classifierLoss = nn.MSELoss(reduction='mean').cuda()
-    classifierLoss = JointsCELoss().cuda()
-    #lmloss = nn.MSELoss(reduction='mean').cuda()
-    lmloss = JointsDistLoss().cuda()
 
     # Data loading code
     train_dataset = eval('dataset.'+cfg.DATASET.DATASET)(
@@ -186,14 +175,14 @@ def main():
         lr_scheduler.step()
 
         # train for one epoch
-        train(cfg, train_loader, model, [heatmapLoss, lmloss], optimizer, epoch,
-              final_output_dir, tb_log_dir, writer_dict)
+        train(cfg, train_loader, model, heatmapLoss, optimizer, epoch,
+              final_output_dir)
 
 
         # evaluate on validation set
         perf_indicator = validate(
-            cfg, valid_loader, valid_dataset, model, [heatmapLoss, lmloss],
-            final_output_dir, tb_log_dir, writer_dict
+            cfg, valid_loader, valid_dataset, model, heatmapLoss,
+            final_output_dir
         )
 
         if perf_indicator >= best_perf:
@@ -225,7 +214,6 @@ def main():
         final_model_state_file)
     )
     torch.save(model.module.state_dict(), final_model_state_file)
-    writer_dict['writer'].close()
 
 
 if __name__ == '__main__':

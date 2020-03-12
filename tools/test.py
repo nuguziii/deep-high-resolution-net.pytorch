@@ -82,7 +82,7 @@ def main():
     torch.backends.cudnn.deterministic = cfg.CUDNN.DETERMINISTIC
     torch.backends.cudnn.enabled = cfg.CUDNN.ENABLED
 
-    model = eval('models.'+cfg.MODEL.NAME+'.get_pose_net')(
+    model = eval('models.' + cfg.MODEL.NAME + '.get_pose_net')(
         cfg, is_train=False
     )
 
@@ -103,11 +103,6 @@ def main():
         use_target_weight=cfg.LOSS.USE_TARGET_WEIGHT  # true
     ).cuda()
 
-    # classifierLoss = nn.MSELoss(reduction='mean').cuda()
-    classifierLoss = JointsCELoss().cuda()
-    #lmloss = nn.MSELoss(reduction='mean').cuda()
-    lmloss = JointsDistLoss().cuda()
-
     # Data loading code
     test_dataset = eval('dataset.' + cfg.DATASET.DATASET)(
         cfg, cfg.DATASET.ROOT, cfg.DATASET.TEST_SET, 'test',
@@ -125,8 +120,8 @@ def main():
     )
 
     # evaluate on validation set
-    test(cfg, test_loader, test_dataset, model, [heatmapLoss, lmloss],
-             final_output_dir, tb_log_dir)
+    test(cfg, test_loader, test_dataset, model, heatmapLoss,
+             final_output_dir)
 
 
 if __name__ == '__main__':
